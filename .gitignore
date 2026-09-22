@@ -1,0 +1,22 @@
+# Python virtual environment (recreated by run.bat / requirements.txt)
+venv/
+__pycache__/
+*.pyc
+
+# Excel lock files and generated backups (backup_excel() writes here at runtime)
+data/backup/
+data/_test_copy.xlsx
+data/_test_backup/
+~$*.xlsx
+
+# Streamlit secrets (never commit credentials)
+.streamlit/secrets.toml
+
+# Local scratch / generated output
+*.pptx
+shot*.png
+_t.pptx
+
+# AI agent tool caches (Antigravity plugin skill cache, not part of the app)
+.agents/
+skills-lock.json
