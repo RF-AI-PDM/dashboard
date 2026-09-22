@@ -9,6 +9,7 @@ All source code must be ASCII-only.
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+import io
 import os
 import shutil
 from typing import Any, Dict, List, Optional
@@ -235,14 +236,15 @@ padding: 16px 22px; border-radius: 8px; margin-bottom: 18px;">
 if "_flash" in st.session_state:
     st.success(st.session_state.pop("_flash"))
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "Ringkasan",
     "Monitoring Pekerjaan",
     "Akumulatif",
     "Potensi Pendapatan",
     "Alur Penagihan",
     "Kelola Data",
-    "Export PPT"
+    "Export PPT",
+    "Export Excel"
 ])
 
 # =========================================================
@@ -867,12 +869,28 @@ with tab2:
             st.success("Tidak ada kendala tercatat pada pekerjaan yang difilter saat ini.")
 
     csv_bytes = filtered_df.to_csv(index=False).encode("utf-8-sig")
-    st.download_button(
-        label="Unduh Data Terfilter (.CSV)",
-        data=csv_bytes,
-        file_name=f"Monitoring_Pekerjaan_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-        mime="text/csv"
-    )
+
+    excel_buffer = io.BytesIO()
+    filtered_df.to_excel(excel_buffer, index=False, sheet_name="Monitoring", engine="openpyxl")
+    excel_bytes = excel_buffer.getvalue()
+
+    dl_col1, dl_col2 = st.columns(2)
+    with dl_col1:
+        st.download_button(
+            label="Unduh Data Terfilter (.CSV)",
+            data=csv_bytes,
+            file_name=f"Monitoring_Pekerjaan_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv",
+            width='stretch'
+        )
+    with dl_col2:
+        st.download_button(
+            label="Unduh Data Terfilter (.XLSX)",
+            data=excel_bytes,
+            file_name=f"Monitoring_Pekerjaan_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            width='stretch'
+        )
 
 # =========================================================
 # TAB 3: AKUMULATIF
@@ -1557,3 +1575,31 @@ with tab7:
                 mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
                 type="primary"
             )
+
+# =========================================================
+# TAB 8: EXPORT EXCEL
+# =========================================================
+with tab8:
+    st.markdown('<div class="section-title">Ekspor Data Excel (.XLSX)</div>', unsafe_allow_html=True)
+    st.write(
+        "Mengunduh file Excel sumber data (`Data.xlsx`) apa adanya, persis dengan desain aslinya "
+        "(format, warna, sheet, dan formula) — sesuai kondisi data terakhir yang tersimpan."
+    )
+
+    st.markdown("---")
+
+    if os.path.exists(EXCEL_PATH):
+        with open(EXCEL_PATH, "rb") as f:
+            xlsx_bytes = f.read()
+
+        file_name = f"Data_PLN_IPS_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+        st.download_button(
+            label="Download Data.xlsx",
+            data=xlsx_bytes,
+            file_name=file_name,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary"
+        )
+    else:
+        st.error(f"File sumber data tidak ditemukan: `{EXCEL_PATH}`")
