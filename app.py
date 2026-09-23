@@ -175,7 +175,7 @@ with st.sidebar:
             return sorted(list(set(clean_vals)))
         return []
 
-    sel_users = st.multiselect("User / Bidang", options=_unique_options("User"), key="f_user")
+    sel_users = st.multiselect("User / Bidang", options=sorted(set(_unique_options("User")) | {"Admin"}), key="f_user")
     sel_proses = st.multiselect("Proses Kontrak", options=_unique_options("Proses Kontrak"), key="f_proses")
     sel_eksekutor = st.multiselect("Eksekutor", options=_unique_options("Eksekutor"), key="f_eksekutor")
     sel_status = st.multiselect("Status Pekerjaan", options=_unique_options("STATUS"), key="f_status")
@@ -1132,7 +1132,7 @@ with tab6:
             "NO": st.column_config.Column("NO", disabled=True, width="small"),
             "User": st.column_config.SelectboxColumn(
                 "User",
-                options=_unique_options("User") or ["UBP JERANJANG", "UPDK LOMBOK", "IPS"]
+                options=sorted(set(_unique_options("User")) | {"Admin"})
             ),
             "Proses Kontrak": st.column_config.SelectboxColumn(
                 "Proses Kontrak",
@@ -1211,7 +1211,7 @@ with tab6:
     with kd_sub2:
         st.subheader("Formulir Tambah Pekerjaan Baru")
 
-        users_list = _unique_options("User") or ["UBP JERANJANG", "UPDK LOMBOK", "IPS"]
+        users_list = sorted(set(_unique_options("User")) | {"Admin"})
         proses_list = _unique_options("Proses Kontrak") or ["SPK", "PJ", "TERKONTRAK IP", "TIDAK TERKONTRAK IP"]
         eksekutor_list = _unique_options("Eksekutor") or ["RENDAL HAR", "OPERASI", "LOGISTIK", "K3L"]
         vendors_list = _unique_options("Nama Vendor") + ["Lainnya"]
