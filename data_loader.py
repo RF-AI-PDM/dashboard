@@ -432,6 +432,36 @@ def _parse_potensi(raw: pd.DataFrame) -> pd.DataFrame:
     return clean_df
 
 
+HISTORI_COLUMNS = ["Timestamp", "Judul Pekerjaan", "Field", "Nilai Lama", "Nilai Baru"]
+
+
+def _parse_histori(raw: pd.DataFrame) -> pd.DataFrame:
+    """Parse sheet 'Histori' (change log written by excel_writer.append_histori).
+
+    Row 0: header. Rows 1..: append-only log rows, no TOTAL marker.
+    """
+    if raw.empty or len(raw) < 2:
+        return pd.DataFrame(columns=HISTORI_COLUMNS)
+
+    data_slice = raw.iloc[1:].copy()
+    mask = (
+        data_slice[1].notna()
+        & (data_slice[1].astype(str).str.strip() != "")
+        & (data_slice[1].astype(str).str.strip().str.lower() != "nan")
+    )
+    data_slice = data_slice[mask]
+
+    clean_df = pd.DataFrame()
+    for col_idx, col_name in enumerate(HISTORI_COLUMNS):
+        if col_idx < data_slice.shape[1]:
+            clean_df[col_name] = data_slice[col_idx].apply(lambda v: _clean_str(v, default=""))
+        else:
+            clean_df[col_name] = ""
+
+    clean_df.reset_index(drop=True, inplace=True)
+    return clean_df
+
+
 def _parse_penagihan(raw: pd.DataFrame) -> List[Dict[str, Any]]:
     """Parse sheet 'PENAGIHAN' (checklist items)."""
     sections: List[Dict[str, Any]] = []
@@ -616,6 +646,10 @@ def load_all(path: str) -> Dict[str, Any]:
         raw_penagihan = _get_sheet_df("PENAGIHAN")
         penagihan = _parse_penagihan(raw_penagihan) if not raw_penagihan.empty else []
 
+        # Sheet 'Histori' (change log, may not exist yet on older workbooks)
+        raw_histori = _get_sheet_df("Histori")
+        histori = _parse_histori(raw_histori) if not raw_histori.empty else pd.DataFrame(columns=HISTORI_COLUMNS)
+
     file_mtime = os.path.getmtime(path) if os.path.exists(path) else 0.0
 
     return {
@@ -625,5 +659,6 @@ def load_all(path: str) -> Dict[str, Any]:
         "monitoring_akumulatif": monitoring_akumulatif,
         "potensi": potensi,
         "penagihan": penagihan,
+        "histori": histori,
         "file_mtime": file_mtime,
     }
