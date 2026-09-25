@@ -18,7 +18,7 @@ import pandas as pd
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData
 from pptx.dml.color import RGBColor
-from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
+from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION, XL_DATA_LABEL_POSITION
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Inches, Pt
@@ -64,6 +64,62 @@ def _truncate_text(text: Any, max_len: int = 60) -> str:
     if len(s) > max_len:
         return s[:max_len - 3] + "..."
     return s
+
+
+def _format_chart_data_and_axes(
+    chart: Any,
+    num_format: str = "#,##0",
+    label_size_pt: float = 8.0,
+    axis_size_pt: float = 8.0,
+    label_position: Optional[Any] = None,
+) -> None:
+    """Format chart data labels, axes, and embedded workbook to avoid scientific notation."""
+    try:
+        plot = chart.plots[0]
+        plot.has_data_labels = True
+        dl = plot.data_labels
+        dl.number_format = num_format
+        dl.font.size = Pt(label_size_pt)
+        dl.font.name = "Segoe UI"
+        dl.font.bold = True
+        if label_position is not None:
+            dl.position = label_position
+    except Exception:
+        pass
+
+    try:
+        va = chart.value_axis
+        va.has_major_gridlines = True
+        va.tick_labels.number_format = num_format
+        va.tick_labels.font.size = Pt(axis_size_pt)
+        va.tick_labels.font.name = "Segoe UI"
+    except Exception:
+        pass
+
+    try:
+        ca = chart.category_axis
+        ca.tick_labels.font.size = Pt(axis_size_pt)
+        ca.tick_labels.font.name = "Segoe UI"
+    except Exception:
+        pass
+
+    # Ensure embedded Excel cells also have explicit number formatting
+    try:
+        cw = getattr(chart.part, "chart_workbook", None)
+        if cw and getattr(cw, "xlsx_part", None):
+            import openpyxl
+            wb = openpyxl.load_workbook(io.BytesIO(cw.xlsx_part.blob))
+            for ws in wb.worksheets:
+                for row in ws.iter_rows():
+                    for cell in row:
+                        if isinstance(cell.value, (int, float)):
+                            cell.number_format = num_format
+            buf = io.BytesIO()
+            wb.save(buf)
+            cw.update_from_xlsx_blob(buf.getvalue())
+    except Exception:
+        pass
+
 
 
 def _add_header(slide: Any, title_text: str, subtitle_text: str = "") -> None:
@@ -353,6 +409,15 @@ def _add_clustered_bar_slide(
         plot.series[1].format.fill.solid()
         plot.series[1].format.fill.fore_color.rgb = COLOR_PRIMARY
 
+    # Format chart data labels, axes, and embedded Excel to avoid scientific notation
+    _format_chart_data_and_axes(
+        chart,
+        num_format="#,##0",
+        label_size_pt=8.5,
+        axis_size_pt=8.0,
+        label_position=XL_DATA_LABEL_POSITION.OUTSIDE_END
+    )
+
     # Info card on the right
     rx = Inches(9.6)
     rcard = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, rx, y, Inches(2.9), cy)
@@ -373,12 +438,12 @@ def _add_clustered_bar_slide(
     p0.space_after = Pt(14)
 
     metrics = [
-        ("Tahun 2026", fmt_pct(kpi_dict.get("ratio_tahun", 0.0)), fmt_rp(kpi_dict.get("deviasi_tahun", 0.0))),
-        ("Semester 1", fmt_pct(kpi_dict.get("ratio_s1", 0.0)), fmt_rp(kpi_dict.get("deviasi_s1", 0.0))),
-        ("Semester 2", fmt_pct(kpi_dict.get("ratio_s2", 0.0)), fmt_rp(kpi_dict.get("deviasi_s2", 0.0))),
+        ("Tahun 2026", target_yr, real_yr, fmt_pct(kpi_dict.get("ratio_tahun", 0.0)), fmt_rp(kpi_dict.get("deviasi_tahun", 0.0))),
+        ("Semester 1", target_s1, cap_s1, fmt_pct(kpi_dict.get("ratio_s1", 0.0)), fmt_rp(kpi_dict.get("deviasi_s1", 0.0))),
+        ("Semester 2", target_s2, cap_s2, fmt_pct(kpi_dict.get("ratio_s2", 0.0)), fmt_rp(kpi_dict.get("deviasi_s2", 0.0))),
     ]
 
-    for period, pct_str, dev_str in metrics:
+    for period, tgt, rls, pct_str, dev_str in metrics:
         p_per = tf.add_paragraph()
         p_per.text = period
         p_per.font.bold = True
@@ -386,8 +451,8 @@ def _add_clustered_bar_slide(
         p_per.font.color.rgb = COLOR_SECONDARY
 
         p_val = tf.add_paragraph()
-        p_val.text = f"Capaian: {pct_str}\nDeviasi: {dev_str}"
-        p_val.font.size = Pt(10)
+        p_val.text = f"Target: {fmt_rp(tgt)}\nRealisasi: {fmt_rp(rls)}\nCapaian: {pct_str} | Dev: {dev_str}"
+        p_val.font.size = Pt(9.5)
         p_val.font.color.rgb = COLOR_DARK_TEXT
         p_val.space_after = Pt(10)
 
@@ -431,6 +496,7 @@ def _add_distribution_slide(
         chart1.legend.position = XL_LEGEND_POSITION.BOTTOM
         chart1.legend.include_in_layout = False
         chart1.plots[0].has_data_labels = True
+        chart1.plots[0].data_labels.number_format = "#,##0"
 
         # Apply status slice colors
         series1 = chart1.plots[0].series[0]
@@ -464,6 +530,7 @@ def _add_distribution_slide(
         chart2.legend.position = XL_LEGEND_POSITION.BOTTOM
         chart2.legend.include_in_layout = False
         chart2.plots[0].has_data_labels = True
+        chart2.plots[0].data_labels.number_format = "#,##0"
 
         # Apply payment slice colors
         series2 = chart2.plots[0].series[0]
@@ -516,6 +583,15 @@ def _add_top10_bar_slide(
         if len(chart.plots[0].series) > 0:
             chart.plots[0].series[0].format.fill.solid()
             chart.plots[0].series[0].format.fill.fore_color.rgb = COLOR_PRIMARY
+
+        # Format chart data labels, axes, and embedded Excel to avoid scientific notation
+        _format_chart_data_and_axes(
+            chart,
+            num_format="#,##0",
+            label_size_pt=8.0,
+            axis_size_pt=8.0,
+            label_position=XL_DATA_LABEL_POSITION.OUTSIDE_END
+        )
 
 
 def _add_gantt_slide(

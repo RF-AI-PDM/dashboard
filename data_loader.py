@@ -27,6 +27,9 @@ def fmt_rp(x: Any) -> str:
         if math.isnan(val) or math.isinf(val):
             return "-"
         val_int = int(round(val))
+        if val_int < 0:
+            formatted = f"{abs(val_int):,}".replace(",", ".")
+            return f"-Rp {formatted}"
         formatted = f"{val_int:,}".replace(",", ".")
         return f"Rp {formatted}"
     except (ValueError, TypeError):
