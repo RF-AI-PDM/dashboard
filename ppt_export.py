@@ -125,6 +125,44 @@ def _format_chart_data_and_axes(
 
 
 
+def _add_logo(
+    slide: Any,
+    path: str,
+    top: Any,
+    height: Any,
+    left: Optional[Any] = None,
+    right: Optional[Any] = None,
+    center_in: Optional[tuple] = None,
+) -> None:
+    """Place a logo by height, anchored at left, right edge, or centered in (x, width)."""
+    if not os.path.exists(path):
+        return
+    try:
+        pic = slide.shapes.add_picture(path, 0, top, height=height)
+    except Exception:
+        return
+    if center_in is not None:
+        pic.left = int(center_in[0] + (center_in[1] - pic.width) / 2)
+    elif right is not None:
+        pic.left = int(right - pic.width)
+    else:
+        pic.left = int(left or 0)
+
+
+def _add_logo_chip(slide: Any, path: str, left: Any, width: Any) -> None:
+    """White rounded badge inside the navy header so dark/colored logos stay legible."""
+    if not os.path.exists(path):
+        return
+    chip = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE, left, Inches(0.1), width, Inches(0.7)
+    )
+    chip.fill.solid()
+    chip.fill.fore_color.rgb = COLOR_WHITE
+    chip.line.fill.background()
+    chip.shadow.inherit = False
+    _add_logo(slide, path, Inches(0.2), Inches(0.5), center_in=(left, width))
+
+
 def _add_header(slide: Any, title_text: str, subtitle_text: str = "") -> None:
     """Add standard PLN / IPS header banner (navy bar with thin yellow strip)."""
     # Navy bar full width (13.333 in x 0.9 in)
@@ -143,8 +181,11 @@ def _add_header(slide: Any, title_text: str, subtitle_text: str = "") -> None:
     strip.fill.fore_color.rgb = COLOR_ACCENT
     strip.line.fill.background()
 
-    # Title text box
-    tb = slide.shapes.add_textbox(Inches(0.8), Inches(0.06), Inches(10.5), Inches(0.8))
+    _add_logo_chip(slide, theme.LOGO_DANANTARA_PATH, Inches(0.2), Inches(2.25))
+    _add_logo_chip(slide, theme.LOGO_PLN_IPS_PATH, Inches(11.133), Inches(2.0))
+
+    # Title text box (between the two logo chips)
+    tb = slide.shapes.add_textbox(Inches(2.65), Inches(0.06), Inches(8.28), Inches(0.8))
     tf = tb.text_frame
     tf.word_wrap = True
     tf.margin_left = tf.margin_top = tf.margin_right = tf.margin_bottom = 0
@@ -162,13 +203,6 @@ def _add_header(slide: Any, title_text: str, subtitle_text: str = "") -> None:
         p2.font.size = Pt(10)
         p2.font.color.rgb = RGBColor(220, 235, 255)
         p2.font.name = "Segoe UI"
-
-    # Logo top-right inside title bar if exists
-    if os.path.exists(theme.LOGO_PATH):
-        try:
-            slide.shapes.add_picture(theme.LOGO_PATH, Inches(11.8), Inches(0.12), height=Inches(0.66))
-        except Exception:
-            pass
 
 
 def _add_footer(slide: Any, slide_num: int, dt_str: str) -> None:
@@ -212,12 +246,8 @@ def _add_title_slide(prs: Presentation, dt_str: str) -> None:
     card.line.color.rgb = COLOR_ACCENT
     card.line.width = Pt(2.5)
 
-    # Logo in card if exists
-    if os.path.exists(theme.LOGO_PATH):
-        try:
-            slide.shapes.add_picture(theme.LOGO_PATH, Inches(1.8), Inches(1.5), height=Inches(0.9))
-        except Exception:
-            pass
+    _add_logo(slide, theme.LOGO_DANANTARA_PATH, Inches(1.5), Inches(0.75), left=Inches(1.8))
+    _add_logo(slide, theme.LOGO_PLN_IPS_PATH, Inches(1.5), Inches(0.75), right=Inches(11.533))
 
     # Text frame
     tb = slide.shapes.add_textbox(Inches(1.8), Inches(2.5), Inches(9.733), Inches(3.4))

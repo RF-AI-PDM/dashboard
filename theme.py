@@ -45,6 +45,8 @@ PAYMENT_COLORS: Dict[str, str] = {
 }
 
 LOGO_PATH = "data/logo.png"
+LOGO_DANANTARA_PATH = "data/logo_danantara.png"
+LOGO_PLN_IPS_PATH = "data/logo_pln_ips.png"
 APP_TITLE = "Dashboard Monitoring Pekerjaan"
 ORG_NAME = "PT PLN Indonesia Power Services (IPS)"
 
