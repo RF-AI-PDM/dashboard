@@ -66,9 +66,12 @@ def _truncate_text(text: Any, max_len: int = 60) -> str:
     return s
 
 
+ID_NUM_FORMAT = "[$-421]#,##0"
+
+
 def _format_chart_data_and_axes(
     chart: Any,
-    num_format: str = "#,##0",
+    num_format: str = ID_NUM_FORMAT,
     label_size_pt: float = 8.0,
     axis_size_pt: float = 8.0,
     label_position: Optional[Any] = None,
@@ -412,7 +415,7 @@ def _add_clustered_bar_slide(
     # Format chart data labels, axes, and embedded Excel to avoid scientific notation
     _format_chart_data_and_axes(
         chart,
-        num_format="#,##0",
+        num_format=ID_NUM_FORMAT,
         label_size_pt=8.5,
         axis_size_pt=8.0,
         label_position=XL_DATA_LABEL_POSITION.OUTSIDE_END
@@ -496,7 +499,7 @@ def _add_distribution_slide(
         chart1.legend.position = XL_LEGEND_POSITION.BOTTOM
         chart1.legend.include_in_layout = False
         chart1.plots[0].has_data_labels = True
-        chart1.plots[0].data_labels.number_format = "#,##0"
+        chart1.plots[0].data_labels.number_format = ID_NUM_FORMAT
 
         # Apply status slice colors
         series1 = chart1.plots[0].series[0]
@@ -530,7 +533,7 @@ def _add_distribution_slide(
         chart2.legend.position = XL_LEGEND_POSITION.BOTTOM
         chart2.legend.include_in_layout = False
         chart2.plots[0].has_data_labels = True
-        chart2.plots[0].data_labels.number_format = "#,##0"
+        chart2.plots[0].data_labels.number_format = ID_NUM_FORMAT
 
         # Apply payment slice colors
         series2 = chart2.plots[0].series[0]
@@ -587,7 +590,7 @@ def _add_top10_bar_slide(
         # Format chart data labels, axes, and embedded Excel to avoid scientific notation
         _format_chart_data_and_axes(
             chart,
-            num_format="#,##0",
+            num_format=ID_NUM_FORMAT,
             label_size_pt=8.0,
             axis_size_pt=8.0,
             label_position=XL_DATA_LABEL_POSITION.OUTSIDE_END
