@@ -9,9 +9,12 @@ All source code must be ASCII-only.
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+import hmac
 import io
 import os
+import re
 import shutil
+import time
 from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
@@ -34,6 +37,60 @@ st.set_page_config(
     page_icon=":bar_chart:",
     initial_sidebar_state="expanded"
 )
+
+
+def _setting(name: str) -> Optional[str]:
+    """Read a setting from the environment, falling back to st.secrets."""
+    val = os.environ.get(name)
+    if val is None:
+        try:
+            val = st.secrets.get(name)
+        except Exception:
+            val = None
+    return None if val is None else str(val)
+
+
+# Streamlit Community Cloud checks the repo out under /mount/src.
+ON_CLOUD = os.path.abspath(__file__).replace("\\", "/").startswith("/mount/src/")
+
+_ro_setting = _setting("DASHBOARD_READONLY")
+READ_ONLY = (
+    _ro_setting.strip().lower() in ("1", "true", "yes", "on")
+    if _ro_setting is not None
+    else ON_CLOUD
+)
+READ_ONLY_MSG = (
+    "Mode baca-saja (online): perubahan data dinonaktifkan karena penyimpanan server "
+    "tidak permanen. Edit data lewat aplikasi lokal, lalu push Data.xlsx ke GitHub."
+)
+
+APP_PASSWORD = _setting("APP_PASSWORD")
+
+if ON_CLOUD and not APP_PASSWORD:
+    st.error("APP_PASSWORD belum diatur di Secrets Streamlit Cloud. Aplikasi dikunci.")
+    st.stop()
+
+if APP_PASSWORD and not st.session_state.get("_auth_ok"):
+    st.markdown(f"### {theme.APP_TITLE}")
+    st.caption(theme.ORG_NAME)
+    with st.form("login_form"):
+        pw_input = st.text_input("Password", type="password")
+        pw_submit = st.form_submit_button("Masuk", type="primary")
+    if pw_submit:
+        if hmac.compare_digest(pw_input.encode("utf-8"), APP_PASSWORD.encode("utf-8")):
+            st.session_state["_auth_ok"] = True
+            st.rerun()
+        time.sleep(1.5)
+        st.error("Password salah.")
+    st.stop()
+
+if READ_ONLY:
+    def _blocked_write(*_args: Any, **_kwargs: Any) -> str:
+        raise RuntimeError("Aplikasi berjalan dalam mode baca-saja; penulisan ke Excel dinonaktifkan.")
+
+    for _fn in ("write_monitoring", "write_monitoring_akumulatif", "write_potensi",
+                "write_targets", "append_histori", "append_progress_note", "backup_excel"):
+        setattr(excel_writer, _fn, _blocked_write)
 
 # Custom CSS for PLN / IPS professional styling
 st.markdown(f"""
@@ -195,6 +252,10 @@ with st.sidebar:
         st.cache_data.clear()
         st.rerun()
 
+    if APP_PASSWORD and st.button("Keluar", width='stretch', key="btn_logout"):
+        st.session_state.pop("_auth_ok", None)
+        st.rerun()
+
     st.markdown("---")
     st.subheader("Filter Monitoring")
 
@@ -271,6 +332,9 @@ padding: 16px 22px; border-radius: 8px; margin-bottom: 18px;">
 # One-shot success message that survives st.rerun() after a save
 if "_flash" in st.session_state:
     st.success(st.session_state.pop("_flash"))
+
+if READ_ONLY:
+    st.info(READ_ONLY_MSG)
 
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "Ringkasan",
@@ -1043,7 +1107,7 @@ with tab2:
 
         with qa_col1:
             if status_val != "SELESAI":
-                if st.button("Tandai Selesai", type="primary", width='stretch', key=f"btn_qa_selesai_{active_idx}"):
+                if st.button("Tandai Selesai", type="primary", width='stretch', key=f"btn_qa_selesai_{active_idx}", disabled=READ_ONLY):
                     curr_m = get_file_mtime(EXCEL_PATH)
                     orig_m = data.get("file_mtime", 0.0)
                     if abs(curr_m - orig_m) > 1e-4:
@@ -1069,7 +1133,7 @@ with tab2:
                         except excel_writer.ExcelLocked:
                             st.error("Tutup file Excel terlebih dahulu")
             else:
-                if st.button("Buka Kembali (Set PROSES)", width='stretch', key=f"btn_qa_reopen_{active_idx}"):
+                if st.button("Buka Kembali (Set PROSES)", width='stretch', key=f"btn_qa_reopen_{active_idx}", disabled=READ_ONLY):
                     curr_m = get_file_mtime(EXCEL_PATH)
                     orig_m = data.get("file_mtime", 0.0)
                     if abs(curr_m - orig_m) > 1e-4:
@@ -1104,7 +1168,7 @@ with tab2:
                     index=_safe_index(bayar_opts, bayar_val),
                     key=f"qa_sel_pay_{active_idx}"
                 )
-                if st.button("Terapkan Status Bayar", type="primary", width='stretch', key=f"btn_apply_qa_pay_{active_idx}"):
+                if st.button("Terapkan Status Bayar", type="primary", width='stretch', key=f"btn_apply_qa_pay_{active_idx}", disabled=READ_ONLY):
                     if new_quick_bayar == bayar_val:
                         st.info("Status pembayaran sama dengan nilai sebelumnya.")
                     else:
@@ -1142,7 +1206,7 @@ with tab2:
                     key=f"qa_txt_kendala_{active_idx}",
                     height=100
                 )
-                if st.button("Simpan Kendala", type="primary", width='stretch', key=f"btn_apply_qa_kendala_{active_idx}"):
+                if st.button("Simpan Kendala", type="primary", width='stretch', key=f"btn_apply_qa_kendala_{active_idx}", disabled=READ_ONLY):
                     curr_m = get_file_mtime(EXCEL_PATH)
                     orig_m = data.get("file_mtime", 0.0)
                     if abs(curr_m - orig_m) > 1e-4:
@@ -1267,7 +1331,7 @@ with tab2:
                     note_user = st.text_input("Nama / Bidang Pencatat", value=user_val if user_val != "-" else "Monitoring")
                 with cn_2:
                     st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-                    btn_save_note = st.form_submit_button("Simpan Catatan ke Histori", type="primary", width='stretch')
+                    btn_save_note = st.form_submit_button("Simpan Catatan ke Histori", type="primary", width='stretch', disabled=READ_ONLY)
 
                 if btn_save_note:
                     if not note_content.strip():
@@ -1340,7 +1404,7 @@ with tab2:
                 with col_u4:
                     upd_kendala = st.text_area("Catatan / Kendala Pekerjaan", value=kendala_val, height=115)
 
-                btn_submit_update = st.form_submit_button("Update & Simpan Perubahan", type="primary")
+                btn_submit_update = st.form_submit_button("Update & Simpan Perubahan", type="primary", disabled=READ_ONLY)
 
             if btn_submit_update:
                 if not upd_judul.strip():
@@ -1467,7 +1531,7 @@ with tab2:
                 # Action buttons
                 act_c1, act_c2 = st.columns(2)
                 with act_c1:
-                    if st.button("Simpan Status Checklist ke Histori", type="primary", width='stretch', key=f"btn_save_chk_{active_idx}"):
+                    if st.button("Simpan Status Checklist ke Histori", type="primary", width='stretch', key=f"btn_save_chk_{active_idx}", disabled=READ_ONLY):
                         curr_m = get_file_mtime(EXCEL_PATH)
                         orig_m = data.get("file_mtime", 0.0)
                         if abs(curr_m - orig_m) > 1e-4:
@@ -1493,7 +1557,7 @@ with tab2:
 
                 with act_c2:
                     if bayar_val != "PROSES PAYMENT" and bayar_val != "PAYMENT":
-                        if st.button("Ajukan Dokumen (Set Status PROSES PAYMENT)", width='stretch', key=f"btn_set_proses_pay_{active_idx}"):
+                        if st.button("Ajukan Dokumen (Set Status PROSES PAYMENT)", width='stretch', key=f"btn_set_proses_pay_{active_idx}", disabled=READ_ONLY):
                             curr_m = get_file_mtime(EXCEL_PATH)
                             orig_m = data.get("file_mtime", 0.0)
                             if abs(curr_m - orig_m) > 1e-4:
@@ -1768,6 +1832,8 @@ with tab5:
 # =========================================================
 with tab6:
     st.markdown('<div class="section-title">Kelola & Sunting Data</div>', unsafe_allow_html=True)
+    if READ_ONLY:
+        st.warning(READ_ONLY_MSG)
     st.info(
         "Perubahan data akan disimpan langsung ke file Excel data/Data.xlsx. "
         "Salinan cadangan (backup) otomatis dibuat sebelum penyimpanan. "
@@ -1868,7 +1934,7 @@ with tab6:
 
         col_b1, col_b2 = st.columns([1, 1])
         with col_b1:
-            if st.button("Simpan ke Excel", type="primary", key="btn_save_mon"):
+            if st.button("Simpan ke Excel", type="primary", key="btn_save_mon", disabled=READ_ONLY):
                 curr_m = get_file_mtime(EXCEL_PATH)
                 orig_m = data.get("file_mtime", 0.0)
                 if abs(curr_m - orig_m) > 1e-4:
@@ -1952,7 +2018,7 @@ with tab6:
                 with col_f4:
                     form_kendala = st.text_area("Catatan / Kendala Pekerjaan", placeholder="Catatan atau kendala...", height=115)
 
-                btn_submit_job = st.form_submit_button("Tambah & Simpan Pekerjaan", type="primary")
+                btn_submit_job = st.form_submit_button("Tambah & Simpan Pekerjaan", type="primary", disabled=READ_ONLY)
 
             if btn_submit_job:
                 if not form_judul.strip():
@@ -2073,7 +2139,7 @@ with tab6:
                     with col_u4:
                         upd_kendala = st.text_area("Catatan / Kendala Pekerjaan", value=str(row.get("Kendala", "")), height=115)
 
-                    btn_submit_update = st.form_submit_button("Update & Simpan Pekerjaan", type="primary")
+                    btn_submit_update = st.form_submit_button("Update & Simpan Pekerjaan", type="primary", disabled=READ_ONLY)
 
                 if btn_submit_update:
                     if not upd_judul.strip():
@@ -2170,7 +2236,7 @@ with tab6:
             width='stretch'
         )
 
-        if st.button("Simpan Akumulatif ke Excel", type="primary", key="btn_save_ak"):
+        if st.button("Simpan Akumulatif ke Excel", type="primary", key="btn_save_ak", disabled=READ_ONLY):
             curr_m = get_file_mtime(EXCEL_PATH)
             orig_m = data.get("file_mtime", 0.0)
             if abs(curr_m - orig_m) > 1e-4:
@@ -2205,7 +2271,7 @@ with tab6:
             width='stretch'
         )
 
-        if st.button("Simpan Potensi ke Excel", type="primary", key="btn_save_pot"):
+        if st.button("Simpan Potensi ke Excel", type="primary", key="btn_save_pot", disabled=READ_ONLY):
             curr_m = get_file_mtime(EXCEL_PATH)
             orig_m = data.get("file_mtime", 0.0)
             if abs(curr_m - orig_m) > 1e-4:
@@ -2287,7 +2353,7 @@ with tab6:
             )
             st.caption(f"Preview: **{fmt_rp(in_ak_s2)}**")
 
-        if st.button("Simpan Target ke Excel", type="primary", key="btn_save_tgt"):
+        if st.button("Simpan Target ke Excel", type="primary", key="btn_save_tgt", disabled=READ_ONLY):
             curr_m = get_file_mtime(EXCEL_PATH)
             orig_m = data.get("file_mtime", 0.0)
             if abs(curr_m - orig_m) > 1e-4:
@@ -2346,7 +2412,7 @@ with tab6:
                 with col_bk1:
                     st.markdown(f"**`{b_file}`** ({b_size_kb:.1f} KB) - Dibuat: {b_mtime_str}")
                 with col_bk2:
-                    if st.button("Pulihkan", key=f"btn_res_{b_file}", disabled=not confirm_restore):
+                    if st.button("Pulihkan", key=f"btn_res_{b_file}", disabled=READ_ONLY or not confirm_restore):
                         try:
                             # Make a backup of current file before overwriting
                             excel_writer.backup_excel(EXCEL_PATH)
