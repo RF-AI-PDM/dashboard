@@ -809,6 +809,69 @@ with tab1:
                 st.text(job_item)
 
     # -----------------------------------------------------
+    # Tren Realisasi Bulanan (dikelompokkan dari Mulai Pekerjaan)
+    # -----------------------------------------------------
+    st.markdown("---")
+    st.markdown('<div class="section-title">Tren Realisasi Bulanan</div>', unsafe_allow_html=True)
+    st.caption("Nilai kontrak dikelompokkan per bulan mulai pekerjaan. Pekerjaan tanpa tanggal mulai yang dapat dibaca tidak ikut terhitung.")
+
+    MONTH_ABBR_ID = ["", "Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
+
+    trend_rows = []
+    for _, r in filtered_df.iterrows():
+        start_dt = dl.parse_id_date(r.get("Mulai Pekerjaan", "")) or dl.parse_id_date(r.get("Kontrak IPS", ""))
+        if not start_dt:
+            continue
+        nilai_val = r.get("Nilai Kontrak Setelah PPN (IPS)")
+        trend_rows.append({
+            "Bulan": date(start_dt.year, start_dt.month, 1),
+            "Nilai": float(nilai_val) if pd.notna(nilai_val) else 0.0
+        })
+
+    if trend_rows:
+        df_trend = (
+            pd.DataFrame(trend_rows)
+            .groupby("Bulan", as_index=False)["Nilai"].sum()
+            .sort_values("Bulan")
+        )
+        df_trend["Label"] = df_trend["Bulan"].apply(lambda d: f"{MONTH_ABBR_ID[d.month]} {d.year}")
+        df_trend["Kumulatif"] = df_trend["Nilai"].cumsum()
+
+        fig_trend = go.Figure()
+        fig_trend.add_trace(go.Bar(
+            name="Realisasi Bulanan",
+            x=df_trend["Label"],
+            y=df_trend["Nilai"],
+            marker_color=theme.PRIMARY,
+            customdata=df_trend["Nilai"].apply(fmt_rp),
+            hovertemplate="<b>%{x}</b><br>Realisasi: %{customdata}<extra></extra>"
+        ))
+        fig_trend.add_trace(go.Scatter(
+            name="Kumulatif",
+            x=df_trend["Label"],
+            y=df_trend["Kumulatif"],
+            mode="lines+markers",
+            line=dict(color=theme.ACCENT, width=2.5),
+            marker=dict(size=6),
+            yaxis="y2",
+            customdata=df_trend["Kumulatif"].apply(fmt_rp),
+            hovertemplate="<b>%{x}</b><br>Kumulatif: %{customdata}<extra></extra>"
+        ))
+        fig_trend.update_layout(
+            height=380,
+            margin=dict(l=20, r=20, t=30, b=40),
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            yaxis=dict(gridcolor="#F1F5F9", title="Nilai Bulanan (Rupiah)"),
+            yaxis2=dict(overlaying="y", side="right", showgrid=False, title="Kumulatif (Rupiah)"),
+            xaxis=dict(showgrid=False, title="")
+        )
+        st.plotly_chart(fig_trend, width='stretch')
+    else:
+        st.info("Belum ada pekerjaan dengan tanggal mulai yang dapat dibaca untuk membentuk tren bulanan.")
+
+    # -----------------------------------------------------
     # Horizontal bar: Nilai Kontrak Setelah PPN (IPS)
     # -----------------------------------------------------
     st.markdown("---")
