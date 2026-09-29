@@ -85,12 +85,19 @@ if APP_PASSWORD and not st.session_state.get("_auth_ok"):
     st.stop()
 
 if READ_ONLY:
-    def _blocked_write(*_args: Any, **_kwargs: Any) -> str:
-        raise RuntimeError("Aplikasi berjalan dalam mode baca-saja; penulisan ke Excel dinonaktifkan.")
+    class _ReadOnlyExcelWriter:
+        """Backstop for the save buttons: rejects every write, without touching
+        the real excel_writer module (other code in the same process still
+        gets the real functions)."""
 
-    for _fn in ("write_monitoring", "write_monitoring_akumulatif", "write_potensi",
-                "write_targets", "append_histori", "append_progress_note", "backup_excel"):
-        setattr(excel_writer, _fn, _blocked_write)
+        ExcelLocked = excel_writer.ExcelLocked
+
+        def __getattr__(self, _name: str) -> Any:
+            def _blocked(*_args: Any, **_kwargs: Any) -> str:
+                raise RuntimeError("Aplikasi berjalan dalam mode baca-saja; penulisan ke Excel dinonaktifkan.")
+            return _blocked
+
+    excel_writer = _ReadOnlyExcelWriter()
 
 # Custom CSS for PLN / IPS professional styling
 st.markdown(f"""

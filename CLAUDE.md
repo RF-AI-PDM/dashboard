@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A single-user Streamlit dashboard (Bahasa Indonesia UI) for monitoring procurement/contract work at PLN Indonesia Power Services. The only data source is `data/Data.xlsx`; the app both reads it and writes edits back to it. There is no git repo, no test suite, and no web backend — everything is local Python.
+A single-user Streamlit dashboard (Bahasa Indonesia UI) for monitoring procurement/contract work at PLN Indonesia Power Services. The only data source is `data/Data.xlsx`; the app both reads it and writes edits back to it. There is no web backend — everything is local Python. A pytest suite lives in `tests/` (see Commands below); it never touches the real `data/Data.xlsx` (see Hard rules).
 
 ## Commands
 
@@ -14,17 +14,18 @@ All commands assume the project venv at `.\venv` (Python 3.12). On Windows use `
 # Run the app (or just double-click run.bat — it creates the venv and installs deps if missing)
 venv\Scripts\python.exe -m streamlit run app.py --browser.gatherUsageStats false
 
-# Install / update dependencies
+# Install / update dependencies (add requirements-dev.txt for pytest)
 venv\Scripts\python.exe -m pip install -r requirements.txt
+venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 
 # Syntax check every module
 venv\Scripts\python.exe -m py_compile app.py data_loader.py excel_writer.py ppt_export.py theme.py
 
+# Run the test suite (tests/, config in pytest.ini). Never touches the real data/Data.xlsx.
+venv\Scripts\python.exe -m pytest -q
+
 # Headless smoke test of the whole app (no browser). Must print EXC: []
 venv\Scripts\python.exe -c "from streamlit.testing.v1 import AppTest; at=AppTest.from_file(r'D:\Artefact\DASHBOARD\app.py', default_timeout=180); at.run(); print('EXC:', [str(e.value) for e in at.exception])"
-
-# Verify loader numbers against the known Excel totals
-venv\Scripts\python.exe -c "import data_loader as dl; d=dl.load_all('data/Data.xlsx'); assert abs(d['pencapaian']['realisasi_tahun']-16618722076)<1; assert abs(d['akumulatif_kpi']['realisasi_tahun']-17222968236)<1; print('ok')"
 
 # Build the PPT without the UI
 venv\Scripts\python.exe -c "import data_loader as dl, ppt_export; d=dl.load_all('data/Data.xlsx'); open('_t.pptx','wb').write(ppt_export.build_pptx(d, d['monitoring']))"
